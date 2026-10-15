@@ -1,8 +1,9 @@
 services:
   frontend:
     build:
-      context: .
-      dockerfile: Dockerfile.frontend
+      context: ../fl-front
+      dockerfile: Dockerfile
       args:
-        BASE_CMU_CLIENT_ID: ${CMU_OAUTH_CLIENT_ID:?Set CMU_OAUTH_CLIENT_ID in .env}
-        BASE_CMU_REDIRECT_URI: http://localhost:3000/api/auth/callback
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID in .env}
+        VITE_CMU_OAUTH_CLIENT_ID: ${CMU_OAUTH_CLIENT_ID:?Set CMU_OAUTH_CLIENT_ID in .env}
+        VITE_CMU_OAUTH_REDIRECT_URI: ${CMU_OAUTH_REDIRECT_URI:?Set CMU_OAUTH_REDIRECT_URI in .env}
