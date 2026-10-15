@@ -1,63 +1,47 @@
-# g55 full-stack deployment
+# CampusFix deployment (FSG 13)
 
-This Compose project runs the complete CampusFix application: PostgreSQL, the Express backend, and the Vite frontend served by Nginx. Keep `fl-front`, `pf-backend`, `pf-db`, and `pf-deploy` as sibling directories. The database uses the initialization script in `pf-deploy/_entrypoint`; the backend applies migrations before starting.
+This Compose project pulls the published backend and frontend images and runs PostgreSQL. It binds the frontend to server loopback port 6013 so the FSG HTTPS reverse proxy can serve it at `https://fsg13.cpecmu.com`. The only local file you need to edit on the server is `.env`.
 
-## First installation (PowerShell)
+## Prepare `.env`
 
-From this folder, copy the template once and fill in the real OAuth credentials:
+Copy `deploy.env.example` to `.env`, then set unique values for the database passwords and `JWT_SECRET`, along with the Google and CMU OAuth credentials. Use at least 32 random characters for the database passwords and JWT secret. `POSTGRES_APP_PASSWORD` must contain only letters and numbers because it is embedded in the PostgreSQL connection URL.
 
-```powershell
-Copy-Item deploy.env.example .env
-```
+The defaults target `https://fsg13.cpecmu.com`. If the OAuth provider settings do not already include these URLs, register them exactly:
 
-Set unique strong values for `POSTGRES_PASSWORD`, `POSTGRES_APP_PASSWORD`, and `JWT_SECRET` (at least 32 characters). Set Google and CMU client IDs/secrets. Keep secrets only in this deployment `.env` or the backend `.env`, never in frontend `VITE_*` variables or Git.
+- Google authorized redirect URI: `https://fsg13.cpecmu.com/auth/google/callback`
+- CMU OAuth redirect URI: `https://fsg13.cpecmu.com/api/auth/callback`
 
-Register these exact callback URLs in the OAuth provider consoles:
+## Deploy on the server
 
-- Google Web OAuth Authorized redirect URI: `http://localhost:6013/auth/google/callback`
-- CMU OAuth redirect URI: `http://localhost:6013/api/auth/callback` (the frontend callback uses port 6013)
+Copy this deployment folder to the server. The existing HTTPS reverse proxy for `fsg13.cpecmu.com` must forward requests to `http://127.0.0.1:6013`; the Compose stack does not bind the host's shared ports 80 or 443. Then run:
 
-For SSH tunnel access, keep the callback URLs on `localhost:6013`. For public access by domain, put an HTTPS reverse proxy in front of the loopback-bound frontend and update `FRONTEND_URL`, `GOOGLE_REDIRECT_URI`, and `CMU_OAUTH_REDIRECT_URI` to the public HTTPS URLs. Redirect URLs must match character for character. For Google OAuth testing mode, add the user accounts as test users.
-
-Build and start all three services:
-
-```powershell
-docker compose up -d --build
+```sh
+docker compose config --quiet
+docker compose pull
+docker compose up -d
 docker compose ps
 docker compose logs -f backend
 ```
 
-Open `http://localhost:6013`. Check `http://localhost:6013/api/health` for `database: connected`. The frontend binds to server loopback port 6013, and PostgreSQL is private to the Compose network.
+The frontend is reachable from the host only at `127.0.0.1:6013`; PostgreSQL is private to the Compose network. The reverse proxy handles public HTTPS and certificates.
+
+The backend applies database migrations before starting. Check the application at `https://fsg13.cpecmu.com` and its database health at `https://fsg13.cpecmu.com/api/health`.
 
 ## Updating and stopping
 
-```powershell
-docker compose up -d --build
+```sh
+docker compose pull
+docker compose up -d
 docker compose down
 ```
 
-`docker compose down` keeps the named `${PROJECT_NAME}-pf-data` volume. `docker compose down -v` deletes it and permanently removes database contents. Keep a database backup before removing the volume.
+`docker compose down` preserves PostgreSQL data and uploads in named volumes. Do not run `docker compose down -v` unless you intend to delete them.
 
-## Deploy through SSH
+## Building and publishing a frontend image
 
-On the server, clone or copy all four sibling repositories, configure `.env` from `deploy.env.example`, and set strong database passwords and a random JWT secret. Set the Google and CMU callback URLs to `http://localhost:6013/...` when accessing through a local SSH tunnel, then register the same URLs with each OAuth provider.
+The deploy compose file only pulls published images. To create a frontend image that accepts OAuth values from `.env` at container startup, use the build override from a checkout that also has the original frontend image available:
 
-Start the stack on the server:
-
-```bash
-cd /path/to/pf-deploy
-docker compose up -d --build
-docker compose ps
+```sh
+docker compose -f docker-compose.yml -f docker-compose.frontend-build.yml build frontend
+docker compose -f docker-compose.yml -f docker-compose.frontend-build.yml push frontend
 ```
-
-From your computer, forward local port 6013 to the server. The SSH daemon port is 6013 as requested.
-
-```bash
-ssh -p 6013 -N -L 6013:127.0.0.1:6013 USER@SERVER
-```
-
-Open `http://localhost:6013`. The web service is bound to loopback, and the database is not published to the network.
-
-## Separate development services
-
-See each repository README for running PostgreSQL, the backend, and frontend independently. Use the development callbacks there (`localhost:3001` for Google's backend callback and `localhost:5173` for CMU's frontend callback) and register those exact URLs with the providers.

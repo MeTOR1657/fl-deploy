@@ -1,0 +1,13 @@
+FROM metor1657/campusfix-frontend:latest
+
+ARG BASE_CMU_CLIENT_ID
+ARG BASE_CMU_REDIRECT_URI
+ENV BASE_CMU_CLIENT_ID=${BASE_CMU_CLIENT_ID}
+ENV BASE_CMU_REDIRECT_URI=${BASE_CMU_REDIRECT_URI}
+
+RUN apk add --no-cache python3
+COPY frontend-entrypoint.py /usr/local/bin/frontend-entrypoint
+RUN chmod 755 /usr/local/bin/frontend-entrypoint
+
+ENTRYPOINT ["/usr/local/bin/frontend-entrypoint"]
+CMD ["nginx", "-g", "daemon off;"]

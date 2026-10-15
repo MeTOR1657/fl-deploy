@@ -1,9 +1,9 @@
-name: ${PROJECT_NAME:-campusfix}
+name: ${PROJECT_NAME:-g13-web}
 
 services:
   db:
     image: postgres:18-alpine
-    container_name: ${PROJECT_NAME:-campusfix}-db
+    container_name: ${PROJECT_NAME:-g13-web}-db
     restart: unless-stopped
     volumes:
       - pf-data:/var/lib/postgresql
@@ -18,18 +18,16 @@ services:
     networks:
       - pf-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB} && PGPASSWORD=$${POSTGRES_APP_PASSWORD} psql -U $${POSTGRES_APP_USER} -d $${POSTGRES_DB} -c 'SELECT 1;'"]
+      test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}" && PGPASSWORD="$${POSTGRES_APP_PASSWORD}" psql -U "$${POSTGRES_APP_USER}" -d "$${POSTGRES_DB}" -c "SELECT 1"']
       interval: 5s
       timeout: 5s
       retries: 20
       start_period: 10s
 
   backend:
-    image: ${BACKEND_IMAGE:-campusfix-backend:latest}
-    build:
-      context: ../pf-backend
-      dockerfile: Dockerfile
-    container_name: ${PROJECT_NAME:-campusfix}-backend
+    image: metor1657/campusfix-backend:latest
+    pull_policy: always
+    container_name: ${PROJECT_NAME:-g13-web}-backend
     restart: unless-stopped
     depends_on:
       db:
@@ -37,19 +35,20 @@ services:
     command: [sh, -c, "pnpm run db:migrate && pnpm run start"]
     environment:
       PORT: 3000
-      DATABASE_URL: postgres://${POSTGRES_APP_USER:?Set POSTGRES_APP_USER in .env}:${POSTGRES_APP_PASSWORD:?Set POSTGRES_APP_PASSWORD in .env}@db:5432/${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      DATABASE_URL: postgres://${POSTGRES_APP_USER:?Set POSTGRES_APP_USER in .env}:${POSTGRES_APP_PASSWORD:?Use URL-safe letters and numbers for this password}@db:5432/${POSTGRES_DB:?Set POSTGRES_DB in .env}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
-      FRONTEND_URL: ${FRONTEND_URL:?Set FRONTEND_URL in .env}
+      FRONTEND_URL: ${FRONTEND_URL:-https://${SITE_DOMAIN:?Set SITE_DOMAIN in .env}}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID in .env}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?Set GOOGLE_CLIENT_SECRET in .env}
-      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:?Set GOOGLE_REDIRECT_URI in .env}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-https://${SITE_DOMAIN:?Set SITE_DOMAIN in .env}/auth/google/callback}
       CMU_OAUTH_CLIENT_ID: ${CMU_OAUTH_CLIENT_ID:?Set CMU_OAUTH_CLIENT_ID in .env}
       CMU_OAUTH_CLIENT_SECRET: ${CMU_OAUTH_CLIENT_SECRET:?Set CMU_OAUTH_CLIENT_SECRET in .env}
-      CMU_OAUTH_REDIRECT_URI: ${CMU_OAUTH_REDIRECT_URI:?Set CMU_OAUTH_REDIRECT_URI in .env}
+      CMU_OAUTH_REDIRECT_URI: ${CMU_OAUTH_REDIRECT_URI:-https://${SITE_DOMAIN:?Set SITE_DOMAIN in .env}/api/auth/callback}
       UPLOAD_DIR: uploads
     volumes:
       - ./logs:/app/logs
+      - uploads:/app/uploads
     networks:
       - pf-net
     healthcheck:
@@ -60,19 +59,18 @@ services:
       start_period: 20s
 
   frontend:
-    image: ${FRONTEND_IMAGE:-campusfix-frontend:latest}
-    build:
-      context: ../fl-front
-      dockerfile: Dockerfile
-      args:
-        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-        VITE_CMU_OAUTH_CLIENT_ID: ${CMU_OAUTH_CLIENT_ID}
-        VITE_CMU_OAUTH_REDIRECT_URI: ${CMU_OAUTH_REDIRECT_URI}
-    container_name: ${PROJECT_NAME:-campusfix}-frontend
+    image: metor1657/campusfix-frontend:latest
+    pull_policy: always
+    container_name: ${PROJECT_NAME:-g13-web}-frontend
     restart: unless-stopped
     depends_on:
       backend:
         condition: service_healthy
+    environment:
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID in .env}
+      CMU_OAUTH_CLIENT_ID: ${CMU_OAUTH_CLIENT_ID:?Set CMU_OAUTH_CLIENT_ID in .env}
+      CMU_OAUTH_REDIRECT_URI: ${CMU_OAUTH_REDIRECT_URI:-https://${SITE_DOMAIN:?Set SITE_DOMAIN in .env}/api/auth/callback}
+    command: [nginx, -g, "daemon off;"]
     ports:
       - "127.0.0.1:${FRONTEND_PORT:-6013}:6000"
     networks:
@@ -86,7 +84,9 @@ services:
 
 volumes:
   pf-data:
-    name: ${PROJECT_NAME:-campusfix}-pf-data
+    name: ${PROJECT_NAME:-g13-web}-pf-data
+  uploads:
+    name: ${PROJECT_NAME:-g13-web}-uploads
 networks:
   pf-net:
-    name: ${PROJECT_NAME:-campusfix}-pf-net
+    name: ${PROJECT_NAME:-g13-web}-pf-net

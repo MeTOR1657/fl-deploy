@@ -1,36 +1,36 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-echo "---------------------------------------------"
-echo "Setting up PostgreSQL database: $POSTGRES_DB"
-echo "Creating application user: $POSTGRES_APP_USER"
-echo "---------------------------------------------"
+echo "Initializing PostgreSQL database and application role."
 
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB"<<-EOSQL
-    REVOKE CONNECT ON DATABASE "$POSTGRES_DB" FROM public;
-    REVOKE ALL ON SCHEMA public FROM PUBLIC;
+psql \
+  --set=ON_ERROR_STOP=1 \
+  --username "$POSTGRES_USER" \
+  --dbname "$POSTGRES_DB" \
+  --set=POSTGRES_DB="$POSTGRES_DB" \
+  --set=app_user="$POSTGRES_APP_USER" \
+  --set=app_password="$POSTGRES_APP_PASSWORD" <<'EOSQL'
+REVOKE CONNECT ON DATABASE :"POSTGRES_DB" FROM PUBLIC;
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
 
-    DO
-    \$do\$
-    BEGIN
-       IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '$POSTGRES_APP_USER') THEN
-          CREATE USER "$POSTGRES_APP_USER" WITH PASSWORD '$POSTGRES_APP_PASSWORD';
-       ELSE
-          ALTER USER "$POSTGRES_APP_USER" WITH PASSWORD '$POSTGRES_APP_PASSWORD';
-       END IF;
-    END
-    \$do\$;
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'app_user', :'app_password')
+WHERE NOT EXISTS (
+  SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = :'app_user'
+)
+\gexec
 
-    CREATE SCHEMA IF NOT EXISTS drizzle AUTHORIZATION "$POSTGRES_APP_USER";
-    ALTER SCHEMA public OWNER TO "$POSTGRES_APP_USER";
-    ALTER DATABASE "$POSTGRES_DB" OWNER TO "$POSTGRES_APP_USER";
+SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'app_user', :'app_password')
+\gexec
 
-    GRANT ALL ON DATABASE "$POSTGRES_DB" TO "$POSTGRES_APP_USER";
-    GRANT ALL ON SCHEMA public TO "$POSTGRES_APP_USER";
-    GRANT ALL ON SCHEMA drizzle TO "$POSTGRES_APP_USER";
+CREATE SCHEMA IF NOT EXISTS drizzle AUTHORIZATION :"app_user";
+ALTER SCHEMA public OWNER TO :"app_user";
+ALTER DATABASE :"POSTGRES_DB" OWNER TO :"app_user";
+GRANT ALL ON DATABASE :"POSTGRES_DB" TO :"app_user";
+GRANT ALL ON SCHEMA public TO :"app_user";
+GRANT ALL ON SCHEMA drizzle TO :"app_user";
 
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO "$POSTGRES_APP_USER";
-    ALTER DEFAULT PRIVILEGES IN SCHEMA drizzle GRANT ALL ON TABLES TO "$POSTGRES_APP_USER";
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO "$POSTGRES_APP_USER";
-    ALTER DEFAULT PRIVILEGES IN SCHEMA drizzle GRANT ALL ON SEQUENCES TO "$POSTGRES_APP_USER";
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO :"app_user";
+ALTER DEFAULT PRIVILEGES IN SCHEMA drizzle GRANT ALL ON TABLES TO :"app_user";
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO :"app_user";
+ALTER DEFAULT PRIVILEGES IN SCHEMA drizzle GRANT ALL ON SEQUENCES TO :"app_user";
 EOSQL
