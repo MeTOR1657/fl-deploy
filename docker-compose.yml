@@ -15,8 +15,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
       POSTGRES_APP_USER: ${POSTGRES_APP_USER:?Set POSTGRES_APP_USER in .env}
       POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:?Set POSTGRES_APP_PASSWORD in .env}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
     networks:
       - pf-net
     healthcheck:
@@ -27,6 +25,7 @@ services:
       start_period: 10s
 
   backend:
+    image: ${BACKEND_IMAGE:-campusfix-backend:latest}
     build:
       context: ../pf-backend
       dockerfile: Dockerfile
@@ -61,10 +60,12 @@ services:
       start_period: 20s
 
   frontend:
+    image: ${FRONTEND_IMAGE:-campusfix-frontend:latest}
     build:
-      context: ../pf-front
+      context: ../fl-front
       dockerfile: Dockerfile
       args:
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
         VITE_CMU_OAUTH_CLIENT_ID: ${CMU_OAUTH_CLIENT_ID}
         VITE_CMU_OAUTH_REDIRECT_URI: ${CMU_OAUTH_REDIRECT_URI}
     container_name: ${PROJECT_NAME:-campusfix}-frontend
@@ -73,8 +74,7 @@ services:
       backend:
         condition: service_healthy
     ports:
-      - "${FRONTEND_PORT:-6055}:6000"
-      - "3000:6000"
+      - "127.0.0.1:${FRONTEND_PORT:-6013}:6000"
     networks:
       - pf-net
     healthcheck:
