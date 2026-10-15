@@ -10,11 +10,11 @@ services:
       - ./_entrypoint:/docker-entrypoint-initdb.d:ro
     environment:
       TZ: Asia/Bangkok
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-4321}
-      POSTGRES_DB: ${POSTGRES_DB:-faculty_issue_db}
-      POSTGRES_APP_USER: ${POSTGRES_APP_USER:-app_user}
-      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:-1234}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      POSTGRES_APP_USER: ${POSTGRES_APP_USER:?Set POSTGRES_APP_USER in .env}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:?Set POSTGRES_APP_PASSWORD in .env}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     networks:
@@ -38,13 +38,16 @@ services:
     command: [sh, -c, "pnpm run db:migrate && pnpm run start"]
     environment:
       PORT: 3000
-      DATABASE_URL: postgres://${POSTGRES_APP_USER:-app_user}:${POSTGRES_APP_PASSWORD:-1234}@db:5432/${POSTGRES_DB:-faculty_issue_db}
-      JWT_SECRET: ${JWT_SECRET:-super_secret_jwt_key_with_at_least_32_characters_for_campusfix}
+      DATABASE_URL: postgres://${POSTGRES_APP_USER:?Set POSTGRES_APP_USER in .env}:${POSTGRES_APP_PASSWORD:?Set POSTGRES_APP_PASSWORD in .env}@db:5432/${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:3000/auth/google/callback}
+      FRONTEND_URL: ${FRONTEND_URL:?Set FRONTEND_URL in .env}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID in .env}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?Set GOOGLE_CLIENT_SECRET in .env}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:?Set GOOGLE_REDIRECT_URI in .env}
+      CMU_OAUTH_CLIENT_ID: ${CMU_OAUTH_CLIENT_ID:?Set CMU_OAUTH_CLIENT_ID in .env}
+      CMU_OAUTH_CLIENT_SECRET: ${CMU_OAUTH_CLIENT_SECRET:?Set CMU_OAUTH_CLIENT_SECRET in .env}
+      CMU_OAUTH_REDIRECT_URI: ${CMU_OAUTH_REDIRECT_URI:?Set CMU_OAUTH_REDIRECT_URI in .env}
       UPLOAD_DIR: uploads
     volumes:
       - ./logs:/app/logs
@@ -61,13 +64,17 @@ services:
     build:
       context: ../pf-front
       dockerfile: Dockerfile
+      args:
+        VITE_CMU_OAUTH_CLIENT_ID: ${CMU_OAUTH_CLIENT_ID}
+        VITE_CMU_OAUTH_REDIRECT_URI: ${CMU_OAUTH_REDIRECT_URI}
     container_name: ${PROJECT_NAME:-campusfix}-frontend
     restart: unless-stopped
     depends_on:
       backend:
         condition: service_healthy
     ports:
-      - "${FRONTEND_PORT:-3000}:6000"
+      - "${FRONTEND_PORT:-6055}:6000"
+      - "3000:6000"
     networks:
       - pf-net
     healthcheck:

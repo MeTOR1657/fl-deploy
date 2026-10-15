@@ -1,36 +1,43 @@
-# CampusFix deployment
+# g55 full-stack deployment
 
-This compose project builds the frontend and backend from sibling repositories and runs them with PostgreSQL:
+This Compose project runs the complete CampusFix application: PostgreSQL, the Express backend, and the Vite frontend served by Nginx. Keep `pf-front`, `pf-backend`, `pf-db`, and `pf-deploy` as sibling directories. The database uses the initialization script in `pf-deploy/_entrypoint`; the backend applies migrations before starting.
 
-- `../pf-front` — Vite production build served by Nginx on port 6000 inside the network.
-- `../pf-backend` — Express API on port 3000; database migrations run before the API starts.
-- `../pf-db` — PostgreSQL data model and schema source; `./_entrypoint` initializes the PostgreSQL application user.
+## First installation (PowerShell)
 
-## Deploy
-
-Keep `pf-front`, `pf-backend`, `pf-db`, and `pf-deploy` as sibling directories. From `pf-deploy`, create `.env` from `deploy.env.example` if it does not already exist:
+From this folder, copy the template once and fill in the real OAuth credentials:
 
 ```powershell
 Copy-Item deploy.env.example .env
 ```
 
-Set strong values for `POSTGRES_PASSWORD`, `POSTGRES_APP_PASSWORD`, and `JWT_SECRET` in `.env`. `JWT_SECRET` must contain at least 32 characters. Then run:
+Set unique strong values for `POSTGRES_PASSWORD`, `POSTGRES_APP_PASSWORD`, and `JWT_SECRET` (at least 32 characters). Set Google and CMU client IDs/secrets. Keep secrets only in this deployment `.env` or the backend `.env`, never in frontend `VITE_*` variables or Git.
+
+Register these exact callback URLs in the OAuth provider consoles:
+
+- Google Web OAuth Authorized redirect URI: `http://localhost:6055/auth/google/callback`
+- CMU OAuth redirect URI: `http://localhost:3000/api/auth/callback` (the frontend is also exposed on port 3000 for the registered CMU callback)
+
+For a server deployment, replace `localhost` with the public HTTPS hostname and update `FRONTEND_URL`, `GOOGLE_REDIRECT_URI`, and `CMU_OAUTH_REDIRECT_URI` to match. Redirect URLs must match character for character. For Google OAuth testing mode, add the user accounts as test users.
+
+Build and start all three services:
 
 ```powershell
 docker compose up -d --build
 docker compose ps
+docker compose logs -f backend
 ```
 
-For Google sign-in, set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env`. In Google Cloud Console, add this exact **Authorized redirect URI** to the OAuth client:
+Open `http://localhost:6055`. Check `http://localhost:6055/api/health` for `database: connected`. The backend container connects to database host `db:5432`; host tools can connect through `localhost:5432`.
 
-```text
-http://localhost:6055/auth/google/callback
+## Updating and stopping
+
+```powershell
+docker compose up -d --build
+docker compose down
 ```
 
-If `FRONTEND_PORT` changes, update both `GOOGLE_REDIRECT_URI` in `.env` and the authorized redirect URI in Google Cloud Console to `http://localhost:<FRONTEND_PORT>/auth/google/callback`. Google OAuth cannot complete until the provider has that exact URI registered. If the consent screen is in testing mode, add the Google accounts you will use as test users.
+`docker compose down` keeps the named `${PROJECT_NAME}-pf-data` volume. `docker compose down -v` deletes it and permanently removes database contents. Keep a database backup before removing the volume.
 
-Open `http://localhost:3000` (or the port configured by `FRONTEND_PORT`). The frontend sends API requests through Nginx to the backend on the private Compose network. PostgreSQL is available on the host at `POSTGRES_PORT`.
+## Separate development services
 
-Follow startup with `docker compose logs -f backend` to confirm migrations finish and the API starts. To update after pulling changes, run `docker compose up -d --build` again.
-
-Database contents persist in the `${PROJECT_NAME}-pf-data` volume. Stop the services with `docker compose down`; this keeps the volume. Removing the volume deletes the database data.
+See each repository README for running PostgreSQL, the backend, and frontend independently. Use the development callbacks there (`localhost:3001` for Google's backend callback and `localhost:5173` for CMU's frontend callback) and register those exact URLs with the providers.
